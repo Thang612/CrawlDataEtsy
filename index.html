@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Get H1 Content</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    h1 { font-size: 24px; }
+    textarea, button { padding: 10px; margin: 5px 0; width: 100%; }
+    #progress { margin-top: 20px; }
+    #progress-bar {
+      width: 100%;
+      background-color: #f3f3f3;
+    }
+    #progress-bar div {
+      height: 30px;
+      width: 0;
+      background-color: #4caf50;
+      text-align: center;
+      line-height: 30px;
+      color: white;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+  <h1>Get H1 Content from URLs</h1>
+  <form id="urlForm">
+    <label for="urls">Enter URLs (one per line):</label><br>
+    <textarea id="urls" name="urls" rows="10" cols="50" required></textarea><br>
+    <button type="submit">Get H1 Content</button>
+  </form>
+  <div id="progress">
+    <div id="progress-bar"><div></div></div>
+  </div>
+
+  <script>
+    document.getElementById('urlForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const urls = document.getElementById('urls').value.split('\n').map(url => url.trim()).filter(url => url);
+        console.log(urls)
+      const progressBar = document.getElementById('progress-bar').firstElementChild;
+      progressBar.style.width = '0%';
+      progressBar.textContent = '0%';
+
+      const results = [];
+      let completed = 0;
+      const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+
+      const fetchH1 = async (url) => {
+        try {
+          const response = await fetch(corsProxy + url);
+          const text = await response.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(text, 'text/html');
+          const h1Element = doc.querySelector('h1');
+          const h1Content = h1Element ? h1Element.innerHTML : 'No H1 tag found';
+          results.push({ URL: url, H1: h1Content });
+        } catch (error) {
+          results.push({ URL: url, H1: 'Error fetching the URL' });
+        } finally {
+          completed++;
+          const percent = Math.round((completed / urls.length) * 100);
+          progressBar.style.width = `${percent}%`;
+          progressBar.textContent = `${percent}%`;
+        }
+      };
+
+      await Promise.all(urls.map(url => fetchH1(url)));
+
+      // Create a new workbook and add the results
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(results);
+      XLSX.utils.book_append_sheet(wb, ws, 'Results');
+
+      // Write the workbook and create a link to download it
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
+      const buf = new ArrayBuffer(wbout.length);
+      const view = new Uint8Array(buf);
+      for (let i = 0; i < wbout.length; ++i) view[i] = wbout.charCodeAt(i) & 0xFF;
+      const blob = new Blob([buf], { type: 'application/octet-stream' });
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = 'results.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      progressBar.textContent = 'Completed!';
+    });
+  </script>
+</body>
+</html>
